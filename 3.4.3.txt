@@ -1,0 +1,132 @@
+---- Formatting
+SET SERVEROUTPUT ON
+SET LINESIZE 170
+SET PAGESIZE 50
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD/MM/YYYY'; 
+
+-- Prompt user to input the quarter
+ACCEPT input_year DATE FORMAT 'YYYY' PROMPT ' Enter the year (YYYY) : ' 
+
+---- Column Formatting
+COLUMN product_id FORMAT 99999999 HEADING 'Product ID'
+COLUMN product_name FORMAT A50 HEADING 'Product Name'
+COLUMN quarter1 FORMAT 99999999.99 HEADING '&input_year Q1 (USD)'
+COLUMN quarter2 FORMAT 99999999.99 HEADING '&input_year Q2 (USD)'
+COLUMN quarter3 FORMAT 99999999.99 HEADING '&input_year Q3 (USD)'
+COLUMN quarter4 FORMAT 99999999.99 HEADING '&input_year Q4 (USD)'
+COLUMN quantity FORMAT 99999999 HEADING 'Quantity'
+COLUMN total_profit FORMAT 99999999.99 HEADING 'Total Profit (USD)'
+COLUMN total_revenue FORMAT 99999999.99 HEADING 'Total Revenue (USD)'
+
+-- Title
+TTITLE LEFT 'Report Generated On: ' _DATE RIGHT 'Page No. : ' FORMAT 999 SQL.PNO SKIP 3 CENTER 'Product Revenue and Profit Quarterly Report for the Year '&input_year'' SKIP 1 CENTER '==============================================================' SKIP 2
+BREAK ON REPORT SKIP 1
+
+COMPUTE SUM LABEL 'TOTAL SALES' OF quarter1 ON REPORT
+COMPUTE SUM OF quarter2 ON REPORT
+COMPUTE SUM OF quarter3 ON REPORT
+COMPUTE SUM OF quarter4 ON REPORT
+COMPUTE SUM OF quantity ON REPORT
+COMPUTE SUM OF total_profit ON REPORT
+COMPUTE SUM OF total_revenue ON REPORT
+
+-- Report View
+CREATE OR REPLACE VIEW prod_rev_profit_Q1 AS
+SELECT dp.product_id,
+    dp.product_name,
+    SUM(sf.unit_profit) AS Q1_profit
+FROM sales_fact sf
+JOIN dim_products dp
+	ON dp.product_key = sf.product_key
+JOIN dim_date dd 
+	ON dd.date_key = sf.date_key
+WHERE (dd.cal_year = &input_year) AND (dd.cal_quarter = 'Q1') 
+GROUP BY dp.product_id, dp.product_name
+ORDER BY dp.product_id DESC;
+
+CREATE OR REPLACE VIEW prod_rev_profit_Q2 AS
+SELECT dp.product_id,
+    dp.product_name,
+    SUM(sf.unit_profit) AS Q2_profit
+FROM sales_fact sf
+JOIN dim_products dp
+	ON dp.product_key = sf.product_key
+JOIN dim_date dd 
+	ON dd.date_key = sf.date_key
+WHERE (dd.cal_year = &input_year) AND (dd.cal_quarter = 'Q2') 
+GROUP BY dp.product_id, dp.product_name
+ORDER BY dp.product_id DESC;
+
+CREATE OR REPLACE VIEW prod_rev_profit_Q3 AS
+SELECT dp.product_id,
+    dp.product_name,
+    SUM(sf.unit_profit) AS Q3_profit
+FROM sales_fact sf
+JOIN dim_products dp
+	ON dp.product_key = sf.product_key
+JOIN dim_date dd 
+	ON dd.date_key = sf.date_key
+WHERE (dd.cal_year = &input_year) AND (dd.cal_quarter = 'Q3') 
+GROUP BY dp.product_id, dp.product_name
+ORDER BY dp.product_id DESC;
+
+CREATE OR REPLACE VIEW prod_rev_profit_Q4 AS
+SELECT dp.product_id,
+    dp.product_name,
+    SUM(sf.unit_profit) AS Q4_profit
+FROM sales_fact sf
+JOIN dim_products dp
+	ON dp.product_key = sf.product_key
+JOIN dim_date dd 
+	ON dd.date_key = sf.date_key
+WHERE (dd.cal_year = &input_year) AND (dd.cal_quarter = 'Q4') 
+GROUP BY dp.product_id, dp.product_name
+ORDER BY dp.product_id DESC;
+
+CREATE OR REPLACE VIEW prod_rev_profit AS
+SELECT
+    dp.product_id AS product_id,
+    dp.product_name AS product_name,
+    COALESCE(Q1.Q1_profit, 0) AS quarter1,
+    COALESCE(Q2.Q2_profit, 0) AS quarter2,
+    COALESCE(Q3.Q3_profit, 0) AS quarter3,
+    COALESCE(Q4.Q4_profit, 0) AS quarter4,
+    SUM(sf.item_quantity) AS quantity,
+    SUM(sf.unit_price) AS total_revenue
+FROM dim_products dp
+JOIN prod_rev_profit_Q1 Q1
+    ON dp.product_id = Q1.product_id
+LEFT JOIN prod_rev_profit_Q2 Q2
+    ON dp.product_id = Q2.product_id
+LEFT JOIN prod_rev_profit_Q3 Q3
+    ON dp.product_id = Q3.product_id
+LEFT JOIN prod_rev_profit_Q4 Q4
+    ON dp.product_id = Q4.product_id
+LEFT JOIN sales_fact sf
+    ON dp.product_key = sf.product_key
+AND sf.date_key IN (
+    SELECT date_key
+    FROM dim_date
+    WHERE cal_year = '&input_year'
+)
+GROUP BY dp.product_id, dp.product_name, Q1.Q1_profit, Q2.Q2_profit, Q3.Q3_profit, Q4.Q4_profit;
+
+-- Generate report
+SELECT 
+    product_id,
+    product_name, 
+    quarter1, 
+    quarter2, 
+    quarter3, 
+    quarter4, 
+    quantity,
+    SUM(quarter1 + quarter2 + quarter3 + quarter4 ) AS total_profit,
+    total_revenue
+FROM prod_rev_profit
+GROUP BY product_id, product_name, quarter1, quarter2, quarter3, quarter4, quantity, total_revenue;
+
+-- Clear formatting
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+TTITLE OFF

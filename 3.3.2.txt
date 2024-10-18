@@ -1,0 +1,88 @@
+---- Formatting
+SET SERVEROUTPUT ON
+SET LINESIZE 170
+SET PAGESIZE 200
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD/MM/YYYY'; 
+
+---- Column Formatting
+COLUMN ranking FORMAT 999 HEADING 'Ranking'
+COLUMN customer_geography FORMAT A20 HEADING 'Customer Geography'
+COLUMN product_category FORMAT A25 HEADING 'Product Category'
+COLUMN total_customers FORMAT 9999999 HEADING 'Total Customers'
+COLUMN retained_customers FORMAT 9999999 HEADING 'Retained Customers'
+COLUMN acquired_customers FORMAT 9999999 HEADING 'Acquired Customers'
+COLUMN retention_rate FORMAT 99999999.99 HEADING 'Retention Rate (%)'
+COLUMN cac FORMAT 99999999.99 HEADING 'Customer Acquisition Cost (CAC) (USD)'
+
+
+-- Prompt user to input the start year and end year
+ACCEPT input_year DATE FORMAT 'YYYY' PROMPT 'Enter the year (YYYY): '
+
+-- Title
+TTITLE LEFT 'Report Generated On: ' _DATE RIGHT 'Page No. : ' FORMAT 999 SQL.PNO SKIP 3 CENTER 'Customer Retention Rates by Demographic in the Year of ' &input_year '' SKIP 1 CENTER '==============================================================' SKIP 2
+BREAK ON customer_geography SKIP 1
+
+COMPUTE AVG LABEL 'AVERAGE: ' OF retention_rate ON customer_geography
+COMPUTE AVG OF cac ON customer_geography
+
+---- Report View
+CREATE OR REPLACE VIEW rr_by_demographic AS
+SELECT
+    dc.customer_geography,
+    pc.product_category,
+    COUNT(DISTINCT sf.customer_key) AS total_customers,
+    COUNT(DISTINCT CASE
+        WHEN TO_CHAR(d.calendar_date, 'YYYY') = '&input_year.'
+        AND sf.item_quantity > 0
+        THEN sf.customer_key
+    END) AS retained_customers,
+    COUNT(DISTINCT CASE
+        WHEN TO_CHAR(d.calendar_date, 'YYYY') = '&input_year.' - 1
+        THEN sf.customer_key
+    END) AS acquired_customers,
+    (SUM(CASE
+        WHEN TO_CHAR(d.calendar_date, 'YYYY') = '&input_year.' - 1
+        THEN sf.unit_price
+    END) / COUNT(DISTINCT CASE
+        WHEN TO_CHAR(d.calendar_date, 'YYYY') = '&input_year.' - 1
+        THEN sf.customer_key
+    END)) AS cac
+FROM
+    dim_customers dc
+    JOIN sales_fact sf ON dc.customer_key = sf.customer_key
+    JOIN dim_date d ON sf.date_key = d.date_key
+    JOIN dim_products pc ON sf.product_key = pc.product_key
+WHERE
+    TO_CHAR(d.calendar_date, 'YYYY') IN ('&input_year.' - 1, '&input_year.')
+GROUP BY
+    dc.customer_geography,
+    pc.product_category
+HAVING
+    COUNT(DISTINCT CASE
+        WHEN TO_CHAR(d.calendar_date, 'YYYY') = '&input_year.' - 1
+        THEN sf.customer_key
+    END) > 0
+    AND COUNT(DISTINCT CASE
+        WHEN TO_CHAR(d.calendar_date, 'YYYY') = '&input_year.'
+        AND sf.item_quantity > 0
+        THEN sf.customer_key
+    END) > 0;
+    
+-- Generate report
+SELECT
+    dense_rank() over (partition by rr.customer_geography order by ((rr.retained_customers / rr.total_customers) * 100) desc) as ranking,
+    rr.customer_geography,
+    rr.product_category,
+    rr.total_customers,
+    rr.acquired_customers,
+    rr.retained_customers,
+    (rr.retained_customers / rr.total_customers) * 100 AS retention_rate,
+    rr.cac
+FROM
+    rr_by_demographic rr;
+    
+-- Clear formatting
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+TTITLE OFF

@@ -1,0 +1,58 @@
+---- Formatting
+SET SERVEROUTPUT ON
+SET LINESIZE 150
+SET PAGESIZE 40
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD/MM/YYYY'; 
+
+---- Column Formatting
+COLUMN customer_geography FORMAT A20 Heading "Customer Geography"
+COLUMN customer_name FORMAT A40 Heading "Customer Name"
+COLUMN month FORMAT A20 Heading "Month"
+COLUMN year FORMAT A20 HEADING "Year"
+COLUMN revenue FORMAT 999999999.99 Heading "Revenue (USD)"
+COLUMN prev_year_revenue FORMAT 999999999.99 Heading "Previous Year Revenue (USD)"
+
+-- Prompt user to input the year
+ACCEPT input_year DATE FORMAT 'YYYY' PROMPT 'Enter the year (YYYY): '
+
+-- Title
+TTITLE LEFT 'Report Generated On: ' _DATE RIGHT 'Page No. : ' FORMAT 999 SQL.PNO SKIP 3 CENTER 'Monthly Sales by Customer Geography in the Year of ' &input_year ' Compared to the Previous Year' SKIP 1 CENTER '===============================================================================================' SKIP 2
+BREAK ON customer_geography SKIP 2
+
+COMPUTE SUM LABEL 'TOTAL SALES' OF revenue ON customer_geography
+COMPUTE SUM OF prev_year_revenue ON customer_geography
+
+---- Report View
+CREATE OR REPLACE VIEW monthly_sales_by_customer_geo AS
+SELECT
+  customer_geography,
+  customer_name,
+  TO_CHAR(d.calendar_date, 'Month') AS month,
+  TO_CHAR(d.calendar_date, 'YYYY') AS year,
+  SUM(CASE WHEN TO_CHAR(d.calendar_date, 'YYYY') = '&input_year.' THEN sf.item_quantity * sf.unit_price ELSE 0 END) AS revenue,
+  SUM(CASE WHEN TO_CHAR(d.calendar_date, 'YYYY') = '&input_year.' - 1 THEN sf.item_quantity * sf.unit_price ELSE 0 END) AS prev_year_revenue
+FROM
+  sales_fact sf
+  JOIN dim_customers c ON sf.customer_key = c.customer_key
+  JOIN dim_date d ON sf.date_key = d.date_key
+WHERE
+  TO_CHAR(d.calendar_date, 'YYYY') IN ('&input_year.', '&input_year.' - 1)
+GROUP BY
+  customer_geography,
+  customer_name,
+  TO_CHAR(d.calendar_date, 'Month'),
+  TO_CHAR(d.calendar_date, 'YYYY'),
+  TO_CHAR(d.calendar_date, 'MM')
+ORDER BY
+  customer_geography,
+  TO_CHAR(d.calendar_date, 'MM');
+
+
+---- Generate Report
+SELECT * FROM monthly_sales_by_customer_geo;
+
+---- Clear formatting
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+TTITLE OFF

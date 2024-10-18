@@ -1,0 +1,77 @@
+---- Formatting
+SET SERVEROUTPUT ON
+SET LINESIZE 200
+SET PAGESIZE 50
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD/MM/YYYY'; 
+
+---- Prompt user to input
+ACCEPT input_wh NUMBER PROMPT 'Enter the Warehouse ID (eg. 1): '
+
+---- Column Formatting
+COLUMN country_name FORMAT A20 Heading "Country Name"
+COLUMN warehouse_id FORMAT 99999999 Heading "Warehouse ID"
+COLUMN warehouse_name FORMAT A20 Heading "Warehouse Name"
+COLUMN product_id FORMAT 99999999 Heading "Product ID"
+COLUMN product_name FORMAT A40 Heading "Product Name"
+COLUMN product_category FORMAT A20 Heading "Product Category"
+COLUMN total_inventory_quantity FORMAT 999999999 HEADING "Total Inventory Quantity"
+COLUMN inventory_status FORMAT A20 Heading "Inventory Status"
+COLUMN reorder_level FORMAT A20 Heading "Reorder Indicator"
+
+-- Generate report title with input year
+TTITLE LEFT 'Report Generated On: ' _DATE RIGHT 'Page No.: ' FORMAT 999 SQL.PNO SKIP 3 CENTER 'Inventory levels and Stock Status by Warehouse Report ' SKIP 1 CENTER '================================================================================' SKIP 2
+
+---- Report View
+CREATE OR REPLACE VIEW inv_by_warehouse_report AS
+SELECT 
+  '[' || dc.country_id || '] ' || dc.country_name AS country_name,
+  dw.warehouse_id,
+  dw.warehouse_name,
+  dp.product_id,
+  dp.product_name,
+  dp.product_category,
+  SUM(if.inventory_quantity) AS total_inventory_quantity,
+  CASE
+    WHEN SUM(if.inventory_quantity) <= 0 THEN 'Out of Stock'
+    WHEN SUM(if.inventory_quantity) < 10 THEN 'Low Stock'
+    WHEN SUM(if.inventory_quantity) < 50 THEN 'Medium Stock'
+    ELSE 'High Stock'
+  END AS inventory_status,
+  CASE
+    WHEN SUM(if.inventory_quantity) < 20 THEN 'Reorder Needed'
+    ELSE 'Sufficient Stock'
+  END AS reorder_level
+FROM inventories_fact if
+JOIN dim_products dp 
+   ON if.product_key = dp.product_key
+JOIN dim_warehouses dw 
+   ON if.warehouse_key = dw.warehouse_key
+JOIN dim_countries dc 
+   ON dw.country_key = dc.country_key
+WHERE dw.warehouse_id = &input_wh
+GROUP BY 
+  dc.country_id,
+  dc.country_name, 
+  dw.warehouse_id,
+  dw.warehouse_name,
+  dp.product_id,
+  dp.product_name,
+  dp.product_category
+ORDER BY 
+  CASE inventory_status 
+    WHEN 'Out of Stock' THEN 1
+    WHEN 'Low Stock' THEN 2
+    WHEN 'Medium Stock' THEN 3
+    ELSE 4
+  END ASC;
+
+BREAK ON country_name;
+
+---- Generate Report
+SELECT * FROM inv_by_warehouse_report;
+
+---- Clear formatting
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+TTITLE OFF

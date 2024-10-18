@@ -1,0 +1,181 @@
+---- Formatting
+SET SERVEROUTPUT ON
+SET LINESIZE 160
+SET PAGESIZE 50
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD/MM/YYYY'; 
+
+---- Prompt user to input
+ACCEPT input_year DATE FORMAT 'YYYY' PROMPT ' Enter the year (YYYY) : ' 
+
+---- Column Formatting
+COLUMN employee_id FORMAT 9999 HEADING "Employee ID"
+COLUMN employee_name FORMAT A20 TRUNC HEADING "Employee Name"
+COLUMN job_title FORMAT A20 TRUNC HEADING "Job Title"
+COLUMN quarter1 FORMAT 999999999.99 HEADING "Quarter 1 (USD)"
+COLUMN quarter2 FORMAT 999999999.99 HEADING "Quarter 2 (USD)"
+COLUMN quarter3 FORMAT 999999999.99 HEADING "Quarter 3 (USD)"
+COLUMN quarter4 FORMAT 999999999.99 HEADING "Quarter 4 (USD)"
+COLUMN sales_quantity FORMAT 999999 HEADING "Sales Quantity (USD)"
+COLUMN sales_amount FORMAT 999999999.99 HEADING "Sales Amount (USD)"
+
+
+---- Title
+TTITLE LEFT 'Report Generated On: ' _DATE RIGHT 'Page No. : ' FORMAT 999 SQL.PNO SKIP 3 CENTER'Sales by Employee' SKIP 1 CENTER 'Best-Selling Employees Quarterly Report in the Year of '&input_year'' SKIP 1 CENTER'=================================================================' SKIP 2
+BREAK ON REPORT
+
+COMPUTE SUM LABEL 'TOTAL SALES' OF quarter1 ON REPORT
+COMPUTE SUM OF quarter2 ON REPORT
+COMPUTE SUM OF quarter3 ON REPORT
+COMPUTE SUM OF quarter4 ON REPORT
+COMPUTE SUM OF sales_quantity ON REPORT
+COMPUTE SUM OF sales_amount ON REPORT
+
+---- Report View
+-- Report View for Employee Sales in Q1
+CREATE OR REPLACE VIEW prc_employee_q1 AS
+SELECT de.employee_id, 
+       ROUND(SUM(sf.order_total_price), 2) AS Q1_total_sales
+FROM sales_fact sf
+JOIN dim_employees de 
+	ON de.employee_key = sf.employee_key
+JOIN dim_date dd 
+	ON dd.date_key = sf.date_key
+WHERE (dd.cal_year = &input_year) AND (dd.cal_quarter = 'Q1') AND employee_id <> 9999
+GROUP BY de.employee_id
+ORDER BY Q1_total_sales DESC;
+
+-- Report View for Employee Sales in Q2
+CREATE OR REPLACE VIEW prc_employee_q2 AS
+SELECT de.employee_id, 
+       ROUND(SUM(sf.order_total_price), 2) AS Q2_total_sales
+FROM sales_fact sf
+JOIN dim_employees de 
+	ON de.employee_key = sf.employee_key
+JOIN dim_date dd 
+	ON dd.date_key = sf.date_key
+WHERE (dd.cal_year = &input_year) AND (dd.cal_quarter = 'Q2') AND employee_id <> 9999
+GROUP BY de.employee_id
+ORDER BY Q2_total_sales DESC;
+
+-- Report View for Employee Sales in Q3
+CREATE OR REPLACE VIEW prc_employee_q3 AS
+SELECT de.employee_id, 
+       ROUND(SUM(sf.order_total_price), 2) AS Q3_total_sales
+FROM sales_fact sf
+JOIN dim_employees de 
+	ON de.employee_key = sf.employee_key
+JOIN dim_date dd 
+	ON dd.date_key = sf.date_key
+WHERE (dd.cal_year = &input_year) AND (dd.cal_quarter = 'Q3') AND employee_id <> 9999
+GROUP BY de.employee_id
+ORDER BY Q3_total_sales DESC;
+
+-- Report View for Employee Sales in Q4
+CREATE OR REPLACE VIEW prc_employee_q4 AS
+SELECT de.employee_id, 
+       ROUND(SUM(sf.order_total_price), 2) AS Q4_total_sales
+FROM sales_fact sf
+JOIN dim_employees de 
+	ON de.employee_key = sf.employee_key
+JOIN dim_date dd 
+	ON dd.date_key = sf.date_key
+WHERE (dd.cal_year = &input_year) AND (dd.cal_quarter = 'Q4') AND employee_id <> 9999
+GROUP BY de.employee_id
+ORDER BY Q4_total_sales DESC;
+
+-- Report View for Employee Total Sales
+CREATE OR REPLACE VIEW prc_emp_total_amt AS
+SELECT employee_id AS employee_id, employee_name AS employee_name, job_title, SUM(sales_quantity) AS sales_quantity, ROUND(SUM(sales_amount), 2) AS sales_amount
+FROM (
+	SELECT de.employee_id, 
+         de.first_name || ' ' || de.last_name AS employee_name,
+		 de.job_title AS job_title,
+         sf.item_quantity AS sales_quantity,
+         sf.order_total_price AS sales_amount
+	FROM sales_fact sf
+	JOIN dim_employees de 
+		ON de.employee_key = sf.employee_key
+	JOIN dim_date dd 
+		ON dd.date_key = sf.date_key
+	WHERE dd.cal_year = &input_year AND dd.cal_quarter = 'Q1' AND employee_id <> 9999
+	UNION ALL
+	SELECT de.employee_id, 
+         de.first_name || ' ' || de.last_name AS employee_name,
+		 de.job_title AS job_title,
+         sf.item_quantity AS sales_quantity,
+         sf.order_total_price AS sales_amount
+	FROM sales_fact sf
+	JOIN dim_employees de 
+		ON de.employee_key = sf.employee_key
+	JOIN dim_date dd 
+		ON dd.date_key = sf.date_key
+	WHERE dd.cal_year = &input_year AND dd.cal_quarter = 'Q2' AND employee_id <> 9999
+	UNION ALL
+	SELECT de.employee_id, 
+         de.first_name || ' ' || de.last_name AS employee_name,
+		 de.job_title AS job_title,
+         sf.item_quantity AS sales_quantity,
+         sf.order_total_price AS sales_amount
+	FROM sales_fact sf
+	JOIN dim_employees de 
+		ON de.employee_key = sf.employee_key
+	JOIN dim_date dd 
+		ON dd.date_key = sf.date_key
+	WHERE dd.cal_year = &input_year AND dd.cal_quarter = 'Q3' AND employee_id <> 9999
+	UNION ALL
+	SELECT de.employee_id, 
+         de.first_name || ' ' || de.last_name AS employee_name,
+		 de.job_title AS job_title,
+         sf.item_quantity AS sales_quantity,
+         sf.order_total_price AS sales_amount
+	FROM sales_fact sf
+	JOIN dim_employees de 
+		ON de.employee_key = sf.employee_key
+	JOIN dim_date dd 
+		ON dd.date_key = sf.date_key
+	WHERE dd.cal_year = &input_year AND dd.cal_quarter = 'Q4' AND employee_id <> 9999
+)
+GROUP BY employee_id, employee_name, job_title
+ORDER BY sales_amount DESC;
+
+---- Generate Report
+SELECT E.employee_id, 
+		E.employee_name, 
+		E.job_title,
+		NVL(A.Q1_total_sales, 0) AS quarter1, 
+		NVL(B.Q2_total_sales, 0) AS quarter2, 
+		NVL(C.Q3_total_sales, 0) AS quarter3, 
+		NVL(D.Q4_total_sales, 0) AS quarter4,
+		E.sales_quantity AS sales_quantity, 
+		E.sales_amount AS sales_amount
+FROM prc_emp_total_amt E
+LEFT JOIN (
+    SELECT employee_id, SUM(Q1_total_sales) AS Q1_total_sales
+    FROM prc_employee_q1
+    GROUP BY employee_id
+) A
+ON E.employee_id = A.employee_id
+LEFT JOIN (
+    SELECT employee_id, SUM(Q2_total_sales) AS Q2_total_sales
+    FROM prc_employee_q2
+    GROUP BY employee_id
+) B
+ON E.employee_id = B.employee_id
+LEFT JOIN (
+    SELECT employee_id, SUM(Q3_total_sales) AS Q3_total_sales
+    FROM prc_employee_q3
+    GROUP BY employee_id
+) C
+ON E.employee_id = C.employee_id
+LEFT JOIN (
+    SELECT employee_id, SUM(Q4_total_sales) AS Q4_total_sales
+    FROM prc_employee_q4
+    GROUP BY employee_id
+) D
+ON E.employee_id = D.employee_id;
+
+--- Clear formatting
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+TTITLE OFF

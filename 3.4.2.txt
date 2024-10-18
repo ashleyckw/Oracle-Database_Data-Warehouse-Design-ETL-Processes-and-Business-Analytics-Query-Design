@@ -1,0 +1,66 @@
+---- Formatting
+SET SERVEROUTPUT ON
+SET LINESIZE 145
+SET PAGESIZE 50
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD/MM/YYYY'; 
+
+---- Prompt user to input
+ACCEPT input_year DATE FORMAT 'YYYY' PROMPT ' Enter the initial year (YYYY) : ' 
+ACCEPT compare_year DATE FORMAT 'YYYY' PROMPT ' Enter the comparison year (YYYY) : ' 
+
+---- Column Formatting
+COLUMN ranking FORMAT 9999 HEADING 'Category Ranking'
+COLUMN product_category FORMAT A16 HEADING 'Product Category'
+COLUMN initial_quantity FORMAT 99999999 HEADING '&input_year Quantity'
+COLUMN initial_sales FORMAT 99999999.99 HEADING '&input_year Sales (USD)'
+COLUMN comparison_quantity FORMAT 99999999 HEADING '&compare_year Quantity'
+COLUMN comparison_sales FORMAT 99999999.99 HEADING '&compare_year Sales (USD)'
+COLUMN percent_diff FORMAT 99999999.99 HEADING 'Percentage Differences (%)'
+COLUMN quantity_diff FORMAT 99999999 HEADING 'Quantity Difference'
+
+---- Title
+TTITLE LEFT 'Report Generated On: ' _DATE RIGHT 'Page No. : ' FORMAT 999 SQL.PNO SKIP 3 CENTER 'Market Trends Analysis' SKIP 1 CENTER 'Product Categories by Sales in the Year of '&input_year ' and ' &compare_year'' SKIP 1 CENTER'==============================================================' SKIP 2
+BREAK ON REPORT
+
+COMPUTE SUM LABEL 'TOTAL: ' OF initial_sales ON REPORT
+COMPUTE SUM OF comparison_sales ON REPORT
+
+---- Report View
+CREATE OR REPLACE VIEW market_trends_analysis AS
+SELECT
+    dp.product_category,
+    SUM(CASE WHEN dd.cal_year = '&input_year' THEN sf.item_quantity ELSE 0 END)  AS initial_quantity,
+    SUM(CASE WHEN dd.cal_year = '&input_year' THEN sf.order_total_price ELSE 0 END)  AS initial_sales,
+    SUM(CASE WHEN dd.cal_year = '&compare_year' THEN sf.item_quantity ELSE 0 END) AS comparison_quantity,
+    SUM(CASE WHEN dd.cal_year = '&compare_year' THEN sf.order_total_price ELSE 0 END) AS comparison_sales,
+    100 * (SUM(CASE WHEN dd.cal_year = '&input_year' THEN sf.order_total_price ELSE 0 END) - SUM(CASE WHEN dd.cal_year = '&compare_year' THEN sf.order_total_price ELSE 0 END)) / SUM(CASE WHEN dd.cal_year = '&input_year' THEN sf.order_total_price ELSE 0 END) AS percent_diff
+FROM 
+    sales_fact sf 
+    JOIN dim_products dp
+        ON sf.product_key = dp.product_key 
+    JOIN dim_date dd
+        ON sf.date_key = dd.date_key
+WHERE 
+    cal_year IN ('&input_year', '&compare_year')
+GROUP BY 
+    product_category
+ORDER BY 
+    comparison_sales DESC;
+    
+---- Generate Report
+SELECT 
+    ROW_NUMBER() OVER (ORDER BY percent_diff DESC) AS ranking,
+    product_category,
+    initial_quantity,
+    initial_sales,
+    comparison_quantity,
+    comparison_sales,
+    comparison_quantity - initial_quantity AS quantity_diff,
+    percent_diff
+FROM market_trends_analysis;
+
+--- Clear formatting
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+TTITLE OFF

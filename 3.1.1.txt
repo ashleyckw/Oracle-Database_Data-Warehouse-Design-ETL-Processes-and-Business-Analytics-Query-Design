@@ -1,0 +1,108 @@
+---- Formatting
+SET SERVEROUTPUT ON
+SET LINESIZE 135
+SET PAGESIZE 50
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD/MM/YYYY'; 
+
+---- Prompt user to input
+ACCEPT input_year DATE FORMAT 'YYYY' PROMPT ' Enter the year (YYYY) : ' 
+ACCEPT input_prod CHAR FORMAT 'A20' PROMPT ' Enter the Product Category : ' 
+
+---- Column Formatting
+COLUMN sales_month FORMAT A28 Heading "Sales Month"
+COLUMN product_category FORMAT A20 Heading "Product Category"
+COLUMN sales_amount FORMAT 999999999.99 HEADING "Monthly Sales (USD)"
+COLUMN pre_sales_amount FORMAT 999999999.99 HEADING "Previous Monthly Sales (USD)"
+COLUMN growth FORMAT 99999.99 HEADING "Growth Rate (%)"
+COLUMN sales_performance FORMAT A20 HEADING "Performance"
+
+---- Title
+TTITLE LEFT 'Report Generated On: ' _DATE RIGHT 'Page No. : ' FORMAT 999 SQL.PNO SKIP 3 CENTER 'Monthly Sales Growth Performance compared to the Previous Month by Product Category in the Year of '&input_year'' SKIP 1 CENTER'==================================================================================================' SKIP 2
+BREAK ON REPORT
+
+COMPUTE SUM LABEL 'TOTAL SALES (USD): ' -
+    AVG LABEL 'AVERAGE SALES AMOUNT (USD): ' -
+    OF sales_amount ON REPORT
+
+---- Report View
+CREATE OR REPLACE VIEW prac_monthly_sales AS 
+WITH monthly_sales AS (
+  SELECT 
+    CASE
+        WHEN EXTRACT(MONTH FROM calendar_date) = 1 THEN 'JANUARY'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 2 THEN 'FEBRUARY'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 3 THEN 'MARCH'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 4 THEN 'APRIL'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 5 THEN 'MAY'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 6 THEN 'JUNE'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 7 THEN 'JULY'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 8 THEN 'AUGUST'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 9 THEN 'SEPTEMBER'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 10 THEN 'OCTOBER'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 11 THEN 'NOVEMBER'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 12 THEN 'DECEMBER'
+    END AS sales_month,
+    DP.product_category AS product_category,
+    SUM(SF.unit_price) AS sales_amount
+  FROM sales_fact SF
+  JOIN dim_products DP 
+    ON SF.product_key = DP.product_key
+  JOIN dim_date DD
+    ON SF.product_key = DP.product_key
+  WHERE EXTRACT(YEAR FROM DD.calendar_date) = '&input_year'
+  AND product_category = UPPER('&input_prod')
+  GROUP BY EXTRACT(MONTH FROM calendar_date), product_category
+), 
+previous_month_sales AS (
+  SELECT 
+    CASE
+        WHEN EXTRACT(MONTH FROM calendar_date) = 1 THEN 'JANUARY'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 2 THEN 'FEBRUARY'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 3 THEN 'MARCH'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 4 THEN 'APRIL'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 5 THEN 'MAY'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 6 THEN 'JUNE'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 7 THEN 'JULY'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 8 THEN 'AUGUST'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 9 THEN 'SEPTEMBER'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 10 THEN 'OCTOBER'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 11 THEN 'NOVEMBER'
+        WHEN EXTRACT(MONTH FROM calendar_date) = 12 THEN 'DECEMBER'
+    END AS sales_month,
+    DP.product_category AS product_category,
+    SUM(SF.unit_price) AS sales_amount,
+    LAG(SUM(SF.unit_price)) OVER (ORDER BY EXTRACT(MONTH FROM DD.calendar_date)) AS pre_sales_amount
+  FROM sales_fact SF
+  JOIN dim_products DP 
+   ON SF.product_key = DP.product_key
+  JOIN dim_date DD
+   ON SF.product_key = DP.product_key
+  WHERE EXTRACT(YEAR FROM DD.calendar_date) = '&input_year'
+  AND product_category = UPPER('&input_prod')
+  GROUP BY EXTRACT(MONTH FROM calendar_date), product_category
+)
+---- Generate Report
+SELECT MS.sales_month  AS sales_month, 
+    MS.product_category, 
+    NVL(MS.sales_amount, 0) AS sales_amount,
+    NVL(PMS.pre_sales_amount, 0) AS pre_sales_amount,
+    ROUND(COALESCE((MS.sales_amount - PMS.pre_sales_amount) / PMS.pre_sales_amount * 100, 0), 2) AS growth,
+    CASE
+        WHEN COALESCE((MS.sales_amount - PMS.pre_sales_amount) / PMS.pre_sales_amount * 100, 0) > 0 THEN 'Improved Performance'
+        WHEN COALESCE((MS.sales_amount - PMS.pre_sales_amount) / PMS.pre_sales_amount * 100, 0) = 0 THEN 'Constant Performance'
+        WHEN COALESCE((MS.sales_amount - PMS.pre_sales_amount) / PMS.pre_sales_amount * 100, 0) < 0 THEN 'Reduced Performance'
+    END AS sales_performance
+FROM monthly_sales MS
+LEFT JOIN previous_month_sales PMS
+  ON MS.sales_month = PMS.sales_month AND MS.product_category = PMS.product_category
+ORDER BY EXTRACT(MONTH FROM TO_DATE(MS.sales_month, 'MONTH')) ASC;
+
+SELECT * FROM prac_monthly_sales;
+
+
+--- Clear formatting
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+TTITLE OFF
+

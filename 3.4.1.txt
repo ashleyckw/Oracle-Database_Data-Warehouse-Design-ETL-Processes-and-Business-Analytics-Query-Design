@@ -1,0 +1,71 @@
+---- Formatting
+SET SERVEROUTPUT ON
+SET LINESIZE 190
+SET PAGESIZE 100
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD/MM/YYYY'; 
+
+---- Prompt user to input
+ACCEPT input_year DATE FORMAT 'YYYY' PROMPT ' Enter the year (YYYY) : ' 
+
+---- Column Formatting
+COLUMN product_id FORMAT 9999 HEADING "Product ID"
+COLUMN product_name FORMAT A20 TRUNC HEADING "Product Name"
+COLUMN product_description FORMAT A20 TRUNC HEADING "Description"
+COLUMN product_category FORMAT A20 HEADING "Category"
+COLUMN product_status FORMAT A20 HEADING "Product Status"
+COLUMN standard_cost FORMAT 999999999.99 HEADING "Standard Cost (USD)"
+COLUMN sales_unit FORMAT 999999 HEADING "Unit Sold"
+COLUMN sales_amount FORMAT 999999999.99 HEADING "Total Sales (USD)"
+COLUMN sales_profit FORMAT 999999999.99 HEADING "Sales Profit (USD)"
+COLUMN profit_contribution FORMAT 999.99 HEADING "Profit Contribution (%)"
+
+---- Title
+TTITLE LEFT 'Report Generated On: ' _DATE RIGHT 'Page No. : ' FORMAT 999 SQL.PNO SKIP 3 CENTER 'Sales by Product' SKIP 1 CENTER 'Top 10 Product that compute the Highest Sales Report for the Year of '&input_year'' SKIP 1 CENTER'=======================================================' SKIP 2
+BREAK ON REPORT
+
+COMPUTE SUM LABEL 'TOTAL: ' OF standard_cost ON REPORT
+COMPUTE SUM OF sales_unit ON REPORT
+COMPUTE SUM OF sales_amount ON REPORT
+COMPUTE SUM OF sales_profit ON REPORT
+
+---- Report View
+CREATE OR REPLACE VIEW sales_of_product AS
+SELECT dp.product_id,
+    dp.product_name,
+    dp.product_description,
+    dp.product_category,
+    CASE 
+        WHEN MAX(sf.order_date) >= TRUNC(TO_DATE('&input_year', 'YYYY'), 'YYYY') THEN 'ACTIVE'
+        ELSE 'INACTIVE'
+    END AS product_status,
+    ROUND(sf.standard_cost, 2) AS standard_cost,
+    SUM(sf.item_quantity) AS sales_unit,
+    ROUND(SUM(sf.order_total_price), 2) AS sales_amount,
+    ROUND(SUM(sf.order_total_price - (sf.item_quantity * sf.standard_cost)), 2) AS sales_profit,
+    ROUND((SUM(sf.order_total_price - (sf.item_quantity * sf.standard_cost)) / SUM(sf.order_total_price)) * 100, 2) AS profit_contribution
+FROM 
+  sales_fact sf
+JOIN dim_products dp 
+  ON dp.product_key = sf.product_key
+JOIN dim_date dd 
+  ON dd.date_key = sf.date_key
+WHERE 
+  dd.cal_year = &input_year
+GROUP BY 
+  dp.product_id,
+  dp.product_name,
+  dp.product_description,
+  dp.product_category,
+  sf.standard_cost
+ORDER BY 
+  sales_amount DESC;
+
+---- Generate Report
+SELECT * FROM sales_of_product
+WHERE ROWNUM <= 10;
+
+--- Clear formatting
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+TTITLE OFF

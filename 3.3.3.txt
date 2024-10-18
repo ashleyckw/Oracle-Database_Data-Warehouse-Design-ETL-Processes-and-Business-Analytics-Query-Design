@@ -1,0 +1,50 @@
+---- Formatting
+SET SERVEROUTPUT ON
+SET LINESIZE 170
+SET PAGESIZE 100
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD/MM/YYYY'; 
+
+---- Column Formatting
+COLUMN employee_id FORMAT 9999 HEADING "Employee ID"
+COLUMN employee_name FORMAT A20 TRUNC HEADING "Employee Name"
+COLUMN job_title FORMAT A20 TRUNC HEADING "Job Title"
+COLUMN order_quantity FORMAT 999999 HEADING "Order Quantity"
+COLUMN sales_amount FORMAT 999999999.99 HEADING "Total Sales Amount (USD)"
+COLUMN average_order_value FORMAT 999999999.99 HEADING "Average Order Value (USD)"
+COLUMN new_customers_acquired FORMAT 999999 HEADING "New Customers Aquired"
+COLUMN conversion_rate FORMAT 999.99 HEADING "Conversion Rate (%)"
+
+---- Title
+TTITLE LEFT 'Report Generated On: ' _DATE RIGHT 'Page No. : ' FORMAT 999 SQL.PNO SKIP 3 CENTER 'Overall Employees Performance Report' SKIP 1 CENTER'=======================================================' SKIP 2
+BREAK ON REPORT
+
+COMPUTE SUM LABEL 'TOTAL' OF order_quantity ON REPORT
+COMPUTE SUM OF sales_amount ON REPORT
+
+---- Report View
+CREATE OR REPLACE VIEW employee_performance AS
+SELECT de.employee_id,
+    de.first_name || ' ' || de.last_name AS employee_name,
+    de.job_title,
+    COUNT(*) AS order_quantity,
+    ROUND(SUM(sf.order_total_price), 2) AS sales_amount,
+    (SELECT ROUND(AVG(order_total_price), 2) FROM sales_fact WHERE employee_key = de.employee_key) AS average_order_value,
+    COUNT(DISTINCT dc.customer_id) AS new_customers_acquired,
+    ROUND(COUNT(CASE WHEN sf.order_status = 'SHIPPED' THEN 1 END) / COUNT(*) * 100, 2) AS conversion_rate
+FROM sales_fact sf
+JOIN dim_employees de 
+	ON de.employee_key = sf.employee_key
+JOIN dim_customers dc
+    ON dc.customer_key = sf.customer_key
+WHERE employee_id <> 9999
+GROUP BY de.employee_id, de.first_name, de.last_name, de.job_title, de.employee_key
+ORDER BY sales_amount DESC;
+
+---- Generate Report
+SELECT * FROM employee_performance;
+
+--- Clear formatting
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+TTITLE OFF
