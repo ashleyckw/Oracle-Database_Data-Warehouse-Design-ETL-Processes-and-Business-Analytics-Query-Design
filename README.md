@@ -2,10 +2,10 @@
 This project implements an end-to-end Data Warehouse using Oracle and PL/SQL. It involves designing a star schema, creating dimension and fact tables, optimizing ETL (Extract, Transform, Load) processes, and developing business analytics dashboards for comprehensive insights into sales, inventory, and employee performance.
 
 ## Key Features
-This proStar Schema Design: Dimension and fact tables for sales, inventory, employee performance, and more.
-ETL Optimization: PL/SQL scripts for efficient data transformation and seamless integration.
-Business Intelligence: Advanced analytics reports and dashboards providing actionable insights on key metrics.
-Query Optimization: Enhanced query performance through strategic indexing and optimization techniques.
+* Star Schema Design: Dimension and fact tables for sales, inventory, employee performance, and more.
+* ETL Optimization: PL/SQL scripts for efficient data transformation and seamless integration.
+* Business Intelligence: Advanced analytics reports and dashboards providing actionable insights on key metrics.
+* Query Optimization: Enhanced query performance through strategic indexing and optimization techniques.
 
 ## Technologies Used
 * Oracle Database
