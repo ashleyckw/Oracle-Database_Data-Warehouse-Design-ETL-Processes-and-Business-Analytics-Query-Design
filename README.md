@@ -24,14 +24,14 @@ To execute these files, connect to your Oracle Database instance and run the scr
 4. Generate analytics reports from the data warehouse.
 
 ## Files
-* cr_schema.txt: Contains SQL scripts for creating the Original Database (logical design).
-* cr_data.txt: Loads data into the Original Database.
-* drop.txt: Drops tables from the Original Database.
-* initial_etl.sql: Script for the initial creation of tables during the ETL processes (physical design).
-* initial_load_data.sql: Script for the initial data load during the ETL processes.
-* subsequent_etl.sql: Script for the subsequent creation of tables during the ETL processes.
-* subsequent_load_data.sql: Script for the subsequent data load during the ETL processes.
-* 3.1.1.txt to 3.4.3.txt: SQL queries for generatin gbusiness analytics reports.
+* ```cr_schema.txt```: Contains SQL scripts for creating the Original Database (logical design).
+* ```cr_data.txt```: Loads data into the Original Database.
+* ```drop.txt```: Drops tables from the Original Database.
+* ```initial_etl.sql```: Script for the initial creation of tables during the ETL processes (physical design).
+* ```initial_load_data.sql```: Script for the initial data load during the ETL processes.
+* ```subsequent_etl.sql```: Script for the subsequent creation of tables during the ETL processes.
+* ```subsequent_load_data.sql```: Script for the subsequent data load during the ETL processes.
+* ```3.1.1.txt``` to ```3.4.3.txt```: SQL queries for generatin gbusiness analytics reports.
 
 ## Project Impact
 This project delivers a fully functional data warehouse with real-time data insights, optimized for business intelligence. The system provides crucial insights into sales trends, inventory levels, and employee performance using advanced analytics dashboards.
